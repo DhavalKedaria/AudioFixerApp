@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Audio Fixer | AAC Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.5s linear infinite;
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
+
+    <div class="max-w-xl w-full bg-white rounded-xl shadow-lg overflow-hidden">
+        <div class="bg-blue-600 p-6 text-center">
+            <h1 class="text-2xl font-bold text-white">Video Audio Fixer</h1>
+            <p class="text-blue-100 mt-2 text-sm">Convert unsupported audio to universal AAC (keeps video quality)</p>
+        </div>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <div class="p-4 bg-yellow-50 border-b border-yellow-100">
+                {% for message in messages %}
+                <div class="flex items-center text-yellow-700 text-sm mb-1">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="p-8">
+            <form id="convertForm" action="{{ url_for('convert') }}" method="post" enctype="multipart/form-data">
+                
+                <input type="hidden" name="download_token" id="download_token">
+
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Upload Video</label>
+                    <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition cursor-pointer relative">
+                        <div class="space-y-1 text-center">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <div class="flex text-sm text-gray-600 justify-center">
+                                <label for="file" class="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none">
+                                    <span>Upload a file</span>
+                                    <input id="file" name="file" type="file" class="sr-only" accept=".mp4,.mkv,.mov,.avi,.webm" required>
+                                </label>
+                                <p class="pl-1">or drag and drop</p>
+                            </div>
+                            <p class="text-xs text-gray-500">MKV, MP4, AVI, MOV up to 2GB</p>
+                            <p id="filename-display" class="text-sm font-semibold text-gray-800 mt-2 h-6 overflow-hidden text-ellipsis whitespace-nowrap"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="btn-container">
+                    <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition">
+                        Convert to AAC
+                    </button>
+                </div>
+
+                <div id="loading-state" class="hidden text-center py-4">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-10 w-10 mb-4 mx-auto"></div>
+                    <h2 class="text-gray-700 font-semibold">Processing...</h2>
+                    <p class="text-gray-500 text-sm">Uploading and converting. Do not close tab.</p>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file');
+        const filenameDisplay = document.getElementById('filename-display');
+        const form = document.getElementById('convertForm');
+        const btnContainer = document.getElementById('btn-container');
+        const loadingState = document.getElementById('loading-state');
+        const tokenInput = document.getElementById('download_token');
+
+        // Show filename when selected
+        fileInput.addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name;
+            if (fileName) {
+                filenameDisplay.textContent = "Selected: " + fileName;
+            }
+        });
+
+        // Handle Submit
+        form.addEventListener('submit', function(e) {
+            // Basic validation
+            if(fileInput.files.length === 0) return;
+
+            // 1. Generate unique token
+            const token = new Date().getTime();
+            tokenInput.value = token;
+
+            // 2. Show Loading UI
+            btnContainer.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+
+            // 3. Poll for cookie
+            const pollTimer = setInterval(function() {
+                // Check if cookie exists with our token
+                if (document.cookie.includes("download_token=" + token)) {
+                    clearInterval(pollTimer);
+                    finishLoading();
+                }
+            }, 1000);
+        });
+
+        function finishLoading() {
+            // Reset UI
+            loadingState.classList.add('hidden');
+            btnContainer.classList.remove('hidden');
+            
+            // Update text to indicate success
+            filenameDisplay.textContent = "Download started! Select another file?";
+            filenameDisplay.classList.add("text-green-600");
+            
+            // Delete the cookie
+            document.cookie = "download_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        }
+    </script>
+</body>
+</html>
